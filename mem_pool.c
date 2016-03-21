@@ -344,7 +344,6 @@ alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
     // save node size
 	size_t nodeSize = (alloc->size);
     // convert to gap node
-	printf("deleting allocation\n");
 	if (_mem_add_to_gap_ix(poolMgr, nodeSize, node) == ALLOC_OK){
     // update metadata (num_allocs, alloc_size)
 		poolMgr->pool.num_allocs--;
@@ -557,7 +556,7 @@ static node_pt _add_node(pool_mgr_pt poolMgr, node_pt prevNode) {
 static alloc_status _add_gap(pool_mgr_pt poolMgr, node_pt node) {
 	gap_pt gap = NULL;
 //Merge gaps below
-	char* endAdd = ((char*) (node->alloc_record.mem + node->alloc_record.size)); //Find ending address to perform merge
+	char* endAdd = ((char*) (node->alloc_record.mem) + node->alloc_record.size); //Find ending address to perform merge
 	if (!endAdd) return ALLOC_FAIL;
 	for (unsigned int i = 0; i < poolMgr->pool.num_gaps; i++) {
 		if (endAdd == poolMgr->gap_ix[i].node->alloc_record.mem) {
@@ -580,7 +579,7 @@ static alloc_status _add_gap(pool_mgr_pt poolMgr, node_pt node) {
 			poolMgr->gap_ix[i].node->alloc_record.size =  (poolMgr->gap_ix[i].size);
 			gap = &(poolMgr->gap_ix[i]);
 			//poolMgr->total_nodes--;
-			return _mem_sort_gap_ix(poolMgr);
+			break;
 			//return ALLOC_OK;
 		}
 	}
@@ -588,7 +587,7 @@ static alloc_status _add_gap(pool_mgr_pt poolMgr, node_pt node) {
 	for (unsigned int j = 0; j < poolMgr->pool.num_gaps; j++) {
 		node_pt current = poolMgr->gap_ix[j].node;
 		assert(current!=NULL); 
-		const char * gapEnd = ((char*) (poolMgr->gap_ix[j].node->alloc_record.mem + poolMgr->gap_ix[j].node->alloc_record.size));
+		const char * gapEnd = (((char*) poolMgr->gap_ix[j].node->alloc_record.mem) + poolMgr->gap_ix[j].node->alloc_record.size);
 		if (node->alloc_record.mem == gapEnd) {
 			node_pt del = node;
 			del->used = 0;
@@ -610,17 +609,19 @@ static alloc_status _add_gap(pool_mgr_pt poolMgr, node_pt node) {
 			if (gap!=NULL) {
 				//_mem_remove_from_gap_ix(poolMgr, gap->size, gap->node);
 				const gap_pt end = &(poolMgr->gap_ix[poolMgr->pool.num_gaps-1]); 
-				*gap = *end; // overwrite gap
+				gap = end; // overwrite gap
 				gap->node = NULL;
 				gap->size = 0;
 				poolMgr->pool.num_gaps--;
 				return _mem_sort_gap_ix(poolMgr);
 			} 
 			gap = &(poolMgr->gap_ix[j]);
-			return ALLOC_OK;//_mem_sort_gap_ix(poolMgr);
+			break;
 		}
 	}
-
+	if (gap != NULL) {
+		return _mem_sort_gap_ix(poolMgr);
+	}
 //No neighboring gaps for merging
 	//Try to resize gap index
 	if (_mem_resize_gap_ix(poolMgr) != ALLOC_OK)
@@ -629,7 +630,6 @@ static alloc_status _add_gap(pool_mgr_pt poolMgr, node_pt node) {
 		return ALLOC_FAIL;
 	}
 //Add gap to back
-	printf("adding to back\n");
 	(poolMgr->pool.num_gaps)++;
 	const gap_pt new = &(poolMgr->gap_ix[poolMgr->pool.num_gaps - 1]);
 	new->size =  (node->alloc_record.size);
